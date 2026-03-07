@@ -144,15 +144,21 @@ Knowledge check:
 ## Current File Map (Relevant)
 - `app/p1/page.tsx` -> `/api/p1` chat UI using `useChat` + streaming message parts
 - `app/api/p1/route.ts` -> streaming backend endpoint with tools + validated inputs
+- `app/p2/page.tsx` -> `/p2` chat UI with Approve/Reject panel
+- `app/api/p2/route.ts` -> LangGraph graph with approval node + MemorySaver checkpointing
+- `app/api/p2/approve/route.ts` -> resume paused graph thread with user decision
 - `.env.local` -> local runtime secret values
 - `.env.example` -> env variable template
 - `package.json` -> dependencies and scripts
+- `docs/p1-concepts.md` -> deep-dive on Project 1 stack + code paths
+- `docs/p2-concepts.md` -> deep-dive on interrupt(), MemorySaver, Command resume
 
 ## Next Step Queue
 - [x] Step 6: Build `/api/p1` minimal streaming endpoint (AI SDK)
 - [x] Step 7: Connect `/p1` UI to `/api/p1` using `useChat`
 - [x] Step 8: Add first tools (`saveNote`, `listNotes`, `calc`) with safe validation
-- [ ] Step 9: Move orchestration to true LangGraph loop (`agent -> tools -> decide -> end`)
+- [x] Step 9: Move orchestration to true LangGraph loop (`agent -> tools -> decide -> end`)
+- [x] Step 10: Human-in-the-Loop approval workflow (Project 2)
 
 ## Learning Rules We Agreed
 - Understanding is the main goal.
@@ -248,3 +254,36 @@ Technical implementation:
 - Agent node: calls LLM to decide next action
 - Tools node: executes tool calls and updates state
 - Conditional logic: determines whether to continue or end
+
+---
+
+### Step 10: Human-in-the-Loop Approval Workflow (Project 2)
+Status: Completed
+
+What we did:
+- Created `app/p2/page.tsx`: chat UI with Approve / Reject panel
+- Created `app/api/p2/route.ts`: LangGraph graph with:
+  - `agent` node: calls `generateText()` to decide tool actions
+  - `approval` node: calls `interrupt()` to pause graph and surface pending tool calls
+  - `tools` node: executes approved tool calls
+  - `MemorySaver` checkpointer: persists graph state between HTTP requests
+  - `isGraphInterrupt` catch: returns `{ status: "awaiting_approval" }` instead of throwing
+- Created `app/api/p2/approve/route.ts`: resumes paused graph with `Command({ resume })`
+- Added `docs/p2-concepts.md`: explains interrupt(), MemorySaver, Command, and code paths
+
+Why this matters:
+- **LangGraph is now the main character** — AI SDK only handles the LLM call
+- `interrupt()` checkpoints graph state and pauses mid-execution (impossible with `streamText`)
+- `MemorySaver` persists the full graph state between HTTP requests, keyed by `thread_id`
+- `Command({ resume: "approve" | "reject" })` resumes from the checkpoint
+
+Key LangGraph concepts learned:
+- **`interrupt(value)`**: pauses graph, checkpoints state, surfaces value to caller
+- **`MemorySaver`**: in-memory checkpoint store — production apps use `PostgresSaver`
+- **`Command({ resume })`**: resumes a paused thread with a user-supplied value
+- **Thread IDs**: each user session gets its own isolated graph run
+
+How to test in `/p2`:
+- `Save a note: the capital of France is Paris.` → Approve → note saved
+- `Save a note: test.` → Reject → agent acknowledges without saving
+- `List my notes.` → no tool call needed → direct response (no approval step)
