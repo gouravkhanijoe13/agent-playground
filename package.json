@@ -11,6 +11,7 @@
   "dependencies": {
     "@ai-sdk/openai": "^3.0.41",
     "@ai-sdk/react": "^3.0.118",
+    "@anthropic-ai/sdk": "^0.79.0",
     "@langchain/core": "^1.1.30",
     "@langchain/langgraph": "^1.2.0",
     "ai": "^6.0.116",
