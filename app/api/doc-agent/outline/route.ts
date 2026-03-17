@@ -39,7 +39,7 @@ export async function POST(req: Request) {
     let response: Anthropic.Message | undefined;
     let iterations = 0;
 
-    while (iterations < 5) {
+    while (iterations < 10) {
       response = await client.messages.create({
         model: "claude-opus-4-6",
         max_tokens: 4096,
@@ -54,6 +54,10 @@ export async function POST(req: Request) {
       messages.push({
         role: "assistant",
         content: response.content as unknown as Anthropic.MessageParam["content"],
+      });
+      messages.push({
+        role: "user",
+        content: "Continue.",
       });
       iterations++;
     }

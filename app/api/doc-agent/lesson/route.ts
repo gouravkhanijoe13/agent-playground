@@ -95,6 +95,10 @@ Fetch the URL and generate a complete lesson following the format in your instru
             role: "assistant",
             content: finalMsg.content as unknown as Anthropic.MessageParam["content"],
           });
+          messages.push({
+            role: "user",
+            content: "Continue.",
+          });
           iterations++;
         }
 
