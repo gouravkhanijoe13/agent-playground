@@ -19,8 +19,7 @@ function AuthForm() {
       body: JSON.stringify({ key }),
     })
     if (res.ok) {
-      router.push(next)
-      router.refresh()
+      window.location.href = next
     } else {
       setError(true)
     }
