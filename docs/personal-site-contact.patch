@@ -1,0 +1,160 @@
+From cf560648dd2514e1a3cf33507c54a2eeea0b36b3 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 17 Mar 2026 04:05:56 +0000
+Subject: [PATCH] feat: wire contact form to send emails via Resend
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Add Vercel serverless function (api/contact.js) that accepts
+  name/email/message and sends to gouravkhanijoe@gmail.com via
+  Resend, with reply_to set to the sender's email
+- Update vercel.json to let /api/* routes bypass the catch-all rewrite
+- Update handleSubmit to call /api/contact with real fetch, showing
+  'Sending...' while in flight, 'Sent ✓' on success, 'Failed' on error
+---
+ api/contact.js | 45 +++++++++++++++++++++++++++++++++++++
+ index.html     | 61 +++++++++++++++++++++++++++++++++++++++++---------
+ vercel.json    |  1 +
+ 3 files changed, 96 insertions(+), 11 deletions(-)
+ create mode 100644 api/contact.js
+
+diff --git a/api/contact.js b/api/contact.js
+new file mode 100644
+index 0000000..74cda57
+--- /dev/null
++++ b/api/contact.js
+@@ -0,0 +1,45 @@
++export default async function handler(req, res) {
++  if (req.method !== 'POST') {
++    return res.status(405).json({ error: 'Method not allowed' });
++  }
++
++  const { name, email, message } = req.body;
++
++  if (!name || !email || !message) {
++    return res.status(400).json({ error: 'name, email, and message are required' });
++  }
++
++  const apiKey = process.env.RESEND_API_KEY;
++  if (!apiKey) {
++    return res.status(500).json({ error: 'Email service not configured' });
++  }
++
++  const response = await fetch('https://api.resend.com/emails', {
++    method: 'POST',
++    headers: {
++      'Content-Type': 'application/json',
++      Authorization: `Bearer ${apiKey}`,
++    },
++    body: JSON.stringify({
++      from: 'Portfolio Contact <onboarding@resend.dev>',
++      to: ['gouravkhanijoe@gmail.com'],
++      reply_to: email,
++      subject: `New message from ${name} via gouravkhanijoe.com`,
++      html: `
++        <h2>New contact form submission</h2>
++        <p><strong>Name:</strong> ${name}</p>
++        <p><strong>Email:</strong> <a href="mailto:${email}">${email}</a></p>
++        <p><strong>Message:</strong></p>
++        <p style="white-space: pre-wrap;">${message}</p>
++      `,
++    }),
++  });
++
++  if (!response.ok) {
++    const error = await response.text();
++    console.error('Resend error:', error);
++    return res.status(500).json({ error: 'Failed to send email' });
++  }
++
++  return res.status(200).json({ success: true });
++}
+diff --git a/index.html b/index.html
+index 4a1f42a..db5f38f 100644
+--- a/index.html
++++ b/index.html
+@@ -1312,18 +1312,57 @@
+     // ══════════════════════════════════════════
+     // CONTACT FORM
+     // ══════════════════════════════════════════
+-    function handleSubmit(e) {
++    async function handleSubmit(e) {
+       e.preventDefault();
+-      const btn = e.target.querySelector('.form-submit');
+-      btn.textContent = 'Sent ✓';
+-      btn.style.borderColor = 'var(--amber)';
+-      btn.style.color       = 'var(--amber)';
+-      setTimeout(() => {
+-        btn.textContent       = 'Send message →';
+-        btn.style.borderColor = '';
+-        btn.style.color       = '';
+-        e.target.reset();
+-      }, 3000);
++      const form = e.target;
++      const btn  = form.querySelector('.form-submit');
++
++      const name    = form.querySelector('#name').value.trim();
++      const email   = form.querySelector('#email').value.trim();
++      const message = form.querySelector('#message').value.trim();
++
++      btn.textContent  = 'Sending…';
++      btn.disabled     = true;
++
++      try {
++        const res = await fetch('/api/contact', {
++          method: 'POST',
++          headers: { 'Content-Type': 'application/json' },
++          body: JSON.stringify({ name, email, message }),
++        });
++
++        if (res.ok) {
++          btn.textContent       = 'Sent ✓';
++          btn.style.borderColor = 'var(--amber)';
++          btn.style.color       = 'var(--amber)';
++          form.reset();
++          setTimeout(() => {
++            btn.textContent       = 'Send message →';
++            btn.style.borderColor = '';
++            btn.style.color       = '';
++          }, 3000);
++        } else {
++          btn.textContent       = 'Failed — try again';
++          btn.style.borderColor = '#e55';
++          btn.style.color       = '#e55';
++          setTimeout(() => {
++            btn.textContent       = 'Send message →';
++            btn.style.borderColor = '';
++            btn.style.color       = '';
++          }, 4000);
++        }
++      } catch {
++        btn.textContent       = 'Failed — try again';
++        btn.style.borderColor = '#e55';
++        btn.style.color       = '#e55';
++        setTimeout(() => {
++          btn.textContent       = 'Send message →';
++          btn.style.borderColor = '';
++          btn.style.color       = '';
++        }, 4000);
++      } finally {
++        btn.disabled = false;
++      }
+     }
+   </script>
+ </body>
+diff --git a/vercel.json b/vercel.json
+index 1cb8909..06c58cc 100644
+--- a/vercel.json
++++ b/vercel.json
+@@ -3,6 +3,7 @@
+   "outputDirectory": ".",
+   "framework": null,
+   "rewrites": [
++    { "source": "/api/(.*)", "destination": "/api/$1" },
+     { "source": "/(.*)", "destination": "/index.html" }
+   ]
+ }
+-- 
+2.43.0
+
